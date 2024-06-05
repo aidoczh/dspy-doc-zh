@@ -1,0 +1,128 @@
+---
+sidebar_position: 2
+---
+
+import AuthorDetails from '@site/src/components/AuthorDetails';
+
+# 执行签名
+
+到目前为止，我们已经了解了什么是签名，以及如何使用它们来构建我们的提示，现在让我们来看看如何执行它们。
+
+## 配置 LM
+
+要执行签名，我们需要 DSPy 模块，这些模块本身依赖于与语言模型（LM）客户端的客户端连接。DSPy 支持 LM API 和本地模型托管。在这个例子中，我们将使用 OpenAI 客户端并配置 GPT-3.5 (`gpt-3.5-turbo`) 模型。
+
+```python
+turbo = dspy.OpenAI(model='gpt-3.5-turbo')
+dspy.settings.configure(lm=turbo)
+```
+
+## 执行签名
+
+让我们使用 DSPy 中最简单的模块 - `Predict` 模块，该模块将此签名作为输入，构建发送到 LM 的提示，并为其生成响应。
+
+```python
+class BasicQA(dspy.Signature):
+    """用简短的事实性答案回答问题。"""
+
+    question = dspy.InputField()
+    answer = dspy.OutputField(desc="通常在 1 到 5 个单词之间")
+
+# 定义预测器。
+predictor = dspy.Predict(BasicQA)
+
+# 在特定输入上调用预测器。
+pred = predictor(question=devset[0].question)
+
+# 打印输入和预测。
+print(f"问题: {devset[0].question}")
+print(f"预测答案: {pred.answer}")
+print(f"实际答案: {devset[0].answer}")
+```
+**输出:**
+```text
+问题: 沧州和琼海都在中国的河北省吗？
+预测答案: 不是。
+实际答案: 不是
+```
+
+`Predict` 模块通过我们上面配置的 LM 生成响应，并执行由签名构建的提示。这返回输出，即 `answer`，它存在于 `predictor` 返回的对象中，并可以通过 `.` 运算符访问。
+
+## 检查输出
+
+让我们深入了解 DSPy 如何使用我们的签名来构建提示，我们可以通过在程序执行后对配置的 LM 使用 `inspect_history` 方法来完成。此方法返回 LM 执行的最后 `n` 个提示。
+
+```python
+turbo.inspect_history(n=1)
+```
+**输出:**
+```text
+用简短的事实性答案回答问题。
+
+---
+
+遵循以下格式。
+
+问题: ${question}
+答案: 通常在 1 到 5 个单词之间
+
+---
+
+问题: 沧州和琼海都在中国的河北省吗？
+答案: 不是。
+```
+
+此外，如果您想存储或使用此提示，您可以访问 LM 对象的 `history` 属性，该属性存储包含每个 LM 生成的相应 `prompt:response` 条目的字典列表。
+
+```python
+turbo.history[0]
+```
+**输出:**
+```text
+{'prompt': "用简短的事实性回答来回答问题。\n\n---\n\n遵循以下格式。\n\n问题: ${question}\n问题的答案: 通常在1到5个词之间\n\n---\n\n问题: 沧州和琼海都位于中国的河北省吗？\n问题的答案:",
+ 'response': <OpenAIObject chat.completion id=chatcmpl-8kCPsxikpVpmSaxdGLUIqubFZS05p at 0x7c3ba41fa840> JSON: {
+   "id": "chatcmpl-8kCPsxikpVpmSaxdGLUIqubFZS05p",
+   "object": "chat.completion",
+   "created": 1706021508,
+   "model": "gpt-3.5-turbo-0613",
+   "choices": [
+     {
+       "index": 0,
+       "message": {
+         "role": "assistant",
+         "content": "不。"
+       },
+       "logprobs": null,
+       "finish_reason": "stop"
+     }
+   ],
+   "usage": {
+     "prompt_tokens": 64,
+     "completion_tokens": 2,
+     "total_tokens": 66
+   },
+   "system_fingerprint": null
+ },
+ 'kwargs': {'stringify_request': '{"temperature": 0.0, "max_tokens": 150, "top_p": 1, "frequency_penalty": 0, "presence_penalty": 0, "n": 1, "model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "用简短的事实性回答来回答问题。\\n\\n---\\n\\n遵循以下格式。\\n\\n问题: ${question}\\n问题\'s 答案: 通常在1到5个词之间\\n\\n---\\n\\n问题: 沧州和琼海都位于中国的河北省吗？\\n问题\'s 答案:"}]}'},
+ 'raw_kwargs': {}}
+```
+
+## `Predict`模块是如何工作的？
+
+预测器的输出是一个`Prediction`类对象，它与`Example`类相似，但具有额外的功能，用于语言模型完成的交互性。
+
+那么，`Predict`模块实际上是如何进行“预测”的呢？以下是一个逐步详细说明：
+
+1. 对预测器的调用将在`Predict`模块的`__call__`方法中执行，该方法执行类的`forward`方法。
+
+2. 在`forward`方法中，DSPy初始化签名、LM调用参数以及少量示例（如果有）。
+
+3. `_generate`方法将少量示例格式化为与签名相似的形式，并使用我们配置的LM对象生成输出，作为一个`Prediction`对象。
+
+如果你想知道提示是如何构建的，DSPy Signature框架在内部处理提示结构，利用DSP模板原语来构建提示。
+
+`Predict`为您提供了一个预定义的管道来执行签名，这很方便，但您也可以通过创建自定义模块来构建更复杂的管道。
+
+***
+
+<AuthorDetails name="Herumb Shandilya"/>

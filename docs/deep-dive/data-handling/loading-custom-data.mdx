@@ -1,0 +1,123 @@
+---
+sidebar_position: 3
+---
+
+import AuthorDetails from '@site/src/components/AuthorDetails';
+
+# 创建自定义数据集
+
+我们已经学习了如何处理 `Example` 对象，并使用 `HotPotQA` 类将 HuggingFace HotPotQA 数据集加载为 `Example` 对象的列表。但在实际生产中，这样的结构化数据集是罕见的。相反，您可能会发现自己在处理自定义数据集，并且可能会有疑问：我应该如何创建自己的数据集，应该使用什么格式呢？
+
+在 DSPy 中，您的数据集是一个 `Examples` 列表，我们可以通过两种方式实现：
+
+* **推荐：Pythonic 方式：** 使用原生 Python 实用程序和逻辑。
+* **高级：使用 DSPy 的 `Dataset` 类**
+
+## 推荐：Pythonic 方式
+
+要创建 `Example` 对象列表，我们可以简单地从源加载数据，并将其组织成 Python 列表。让我们加载一个示例 CSV 文件 `sample.csv`，其中包含 3 个字段：(**context**、**question** 和 **summary**)，通过 Pandas。然后，我们可以构建我们的数据列表。
+
+```python
+import pandas as pd
+
+df = pd.read_csv("sample.csv")
+print(df.shape)
+```
+**输出:**
+```text
+(1000, 3)
+```
+```python
+dataset = []
+
+for context, question, answer in df.values:
+    dataset.append(dspy.Example(context=context, question=question, answer=answer).with_inputs("context", "question"))
+
+print(dataset[:3])
+```
+**输出:**
+```python
+[Example({'context': nan, 'question': 'Which is a species of fish? Tope or Rope', 'answer': 'Tope'}) (input_keys={'question', 'context'}),
+ Example({'context': nan, 'question': 'Why can camels survive for long without water?', 'answer': 'Camels use the fat in their humps to keep them filled with energy and hydration for long periods of time.'}) (input_keys={'question', 'context'}),
+ Example({'context': nan, 'question': "Alice's parents have three daughters: Amy, Jessy, and what’s the name of the third daughter?", 'answer': 'The name of the third daughter is Alice'}) (input_keys={'question', 'context'})]
+```
+
+虽然这相当简单，但让我们看看在 DSPy 中如何加载数据集 - 通过 DSPythonic 方式！
+
+## 高级：使用 DSPy 的 `Dataset` 类（可选）
+
+让我们利用我们在前一篇文章中定义的 `Dataset` 类来完成预处理：
+
+* 从 CSV 加载数据到数据框。
+* 将数据拆分为训练、开发和测试集。
+* 填充 `_train`、`_dev` 和 `_test` 类属性。请注意，这些属性应该是字典列表，或类似 HuggingFace 数据集的映射迭代器，以使其正常工作。
+
+所有这些都是通过 `__init__` 方法完成的，这是我们唯一需要实现的方法。
+
+```python
+import pandas as pd
+from dspy.datasets.dataset import Dataset
+
+class CSVDataset(Dataset):
+    def __init__(self, file_path, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        
+        df = pd.read_csv(file_path)
+        self._train = df.iloc[0:700].to_dict(orient='records')
+
+        self._dev = df.iloc[700:].to_dict(orient='records')
+
+dataset = CSVDataset("sample.csv")
+print(dataset.train[:3])
+```
+**输出:**
+```text
+[Example({'context': nan, 'question': '哪一种是鱼类？Tope 还是 Rope', 'answer': 'Tope'}) (input_keys={'question', 'context'}),
+ Example({'context': nan, 'question': '为什么骆驼可以长时间不喝水？', 'answer': '骆驼利用驼峰中的脂肪，让它们长时间保持充足的能量和水分。'}) (input_keys={'question', 'context'}),
+ Example({'context': nan, 'question': '爱丽丝的父母有三个女儿：艾米、杰西，第三个女儿叫什么名字？', 'answer': '第三个女儿的名字是爱丽丝'}) (input_keys={'question', 'context'})]
+```
+
+让我们逐步了解这段代码：
+
+* 它继承了 DSPy 中的基础 `Dataset` 类。这样可以继承所有有用的数据加载/处理功能。
+* 我们将 CSV 中的数据加载到 DataFrame 中。
+* 我们获取 DataFrame 中的**训练集**，即前 700 行，并使用 `to_dict(orient='records')` 方法将其转换为字典列表，然后赋值给 `self._train`。
+* 我们获取 DataFrame 中的**开发集**，即前 300 行，并使用 `to_dict(orient='records')` 方法将其转换为字典列表，然后赋值给 `self._dev`。
+
+现在使用 Dataset 基类可以使加载自定义数据集变得非常简单，避免了为每个新数据集编写所有那些样板代码的麻烦。
+
+:::注意
+
+在上面的代码中，我们没有填充 `_test` 属性，这没有问题，也不会导致任何不必要的错误。但是，如果尝试访问测试集，将会出现错误。
+
+```python
+dataset.test[:5]
+```
+****
+```text
+---------------------------------------------------------------------------
+AttributeError                            Traceback (most recent call last)
+<ipython-input-59-5202f6de3c7b> in <cell line: 1>()
+----> 1 dataset.test[:5]
+
+/usr/local/lib/python3.10/dist-packages/dspy/datasets/dataset.py in test(self)
+     51     def test(self):
+     52         if not hasattr(self, '_test_'):
+---> 53             self._test_ = self._shuffle_and_sample('test', self._test, self.test_size, self.test_seed)
+     54 
+     55         return self._test_
+
+AttributeError: 'CSVDataset' object has no attribute '_test'
+```
+
+为了防止这种情况发生，只需确保 `_test` 不是 `None`，并填充适当的数据即可。
+
+:::
+
+您可以重写 `Dataset` 类中的方法，以进一步自定义您的类。
+
+总之，Dataset 基类提供了一种简单的方式来加载和预处理自定义数据集，代码量最小！ 
+
+***
+
+<AuthorDetails name="Herumb Shandilya"/>

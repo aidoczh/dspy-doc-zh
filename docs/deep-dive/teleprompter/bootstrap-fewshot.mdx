@@ -1,0 +1,126 @@
+---
+sidebar_position: 1
+---
+
+import AuthorDetails from '@site/src/components/AuthorDetails';
+
+# BootstrapFewShot
+
+在编译 DSPy 程序时，我们通常会调用一个叫做 teleprompter 的优化器，它接受程序、训练集和度量标准，并返回一个新的优化程序。不同的 teleprompters 会应用不同的优化策略。这一系列的 teleprompters 专注于优化少样本示例。让我们以一个样本流水线为例，看看如何使用 teleprompter 进行优化。
+
+## 设置一个样本流水线
+
+我们将在 GSM8K 数据集上创建一个基本的答案生成流水线，就像我们在[最小示例](https://dspy-docs.vercel.app/docs/quick-start/minimal-example)中看到的那样，我们不会对其进行任何更改！所以让我们从配置 LM 开始，这里我们将使用 OpenAI LM 客户端，LLM 使用 `gpt-3.5-turbo`。
+
+```python
+import dspy
+
+turbo = dspy.OpenAI(model='gpt-3.5-turbo', max_tokens=250)
+dspy.settings.configure(lm=turbo)
+```
+
+现在我们已经设置好了 LM 客户端，是时候导入 DSPy 提供的 `GSM8k` 类中的训练-开发集了：
+
+```python
+from dspy.datasets.gsm8k import GSM8K, gsm8k_metric
+
+gms8k = GSM8K()
+
+trainset, devset = gms8k.train, gms8k.dev
+```
+
+我们现在定义一个基本的 QA 内联签名，即 `question->answer`，并将其传递给 `ChainOfThought` 模块，该模块会对签名应用必要的 CoT 风格提示的附加操作。
+
+```python
+class CoT(dspy.Module):
+    def __init__(self):
+        super().__init__()
+        self.prog = dspy.ChainOfThought("question -> answer")
+    
+    def forward(self, question):
+        return self.prog(question=question)
+```
+
+现在我们也需要评估这个流水线！我们将使用 DSPy 提供的 `Evaluate` 类，作为度量标准，我们将使用上面导入的 `gsm8k_metric`。
+
+```python
+from dspy.evaluate import Evaluate
+
+evaluate = Evaluate(devset=devset[:], metric=gsm8k_metric, num_threads=NUM_THREADS, display_progress=True, display_table=False)
+```
+
+要评估 `CoT` 流水线，我们需要创建一个对象并将其作为参数传递给 `evaluator` 调用。
+
+```python
+cot_baseline = CoT()
+
+evaluate(cot_baseline, devset=devset[:])
+```
+
+现在我们已经准备好使用基准流水线，让我们尝试使用 `BootstrapFewShot` teleprompter 并优化我们的流水线，使其变得更好！
+
+## 使用 `BootstrapFewShot`
+
+让我们开始导入和初始化我们的 teleprompter，作为度量标准，我们将使用上面导入并使用的 `gsm8k_metric`：
+
+```python
+from dspy.teleprompt import BootstrapFewShotWithRandomSearch
+
+teleprompter = BootstrapFewShotWithRandomSearch(
+    metric=gsm8k_metric, 
+    max_bootstrapped_demos=8, 
+    max_labeled_demos=8,
+)
+```
+
+`metric` 是一个明显的参数，但 `max_bootstrapped_demos` 和 `max_labeled_demos` 参数是什么呢？让我们通过表格来看一下它们的区别：
+| 特征                  | `max_labeled_demos`                                  | `max_bootstrapped_demos`                             |
+|-----------------------|------------------------------------------------------|------------------------------------------------------|
+| **目的**              | 指的是用于直接训练学生模块的最大标记演示（示例）数量。标记演示通常是预先存在的、手动标记的示例，模块可以从中学习。 | 指的是将进行引导的演示的最大数量。在这种情况下，引导可能意味着基于教师模块的预测或其他过程生成新的训练示例。然后，这些引导演示将与手动标记的示例一起使用或代替使用。 |
+| **训练用途**          | 直接用于训练；由于手动标记，通常更可靠。 | 增加训练数据；由于是生成的示例，可能不太准确。 |
+| **数据来源**          | 预先存在的手动标记示例数据集。                    | 在训练过程中生成，通常使用教师模块的输出。 |
+| **对训练的影响**      | 假设标签准确，质量和可靠性更高。                  | 提供更多数据，但可能引入噪音或不准确性。 |
+
+这个即使你的数据中没有某些字段，也会为其添加所需的字段，例如我们没有为标记添加理由，但你会看到这个即时提供的提示中为每个少样本示例提供了理由，如何实现的呢？通过使用一个`teacher`模块生成它们，这是一个可选参数，因为我们没有传递它，所以这个提示器会从我们正在训练的模块或`student`模块中创建一个教师。
+
+在下一节中，我们将逐步看到这个过程，但现在让我们通过调用提示器中的`compile`方法来优化我们的`CoT`模块：
+
+```python
+cot_compiled = teleprompter.compile(CoT(), trainset=trainset, valset=devset)
+```
+
+一旦训练完成，您将获得一个更优化的模块，可以随时保存或重新加载以供使用：
+
+```python
+cot_compiled.save('turbo_gsm8k.json')
+
+# 加载:
+# cot = CoT()
+# cot.load('turbo_gsm8k.json')
+```
+
+## `BootstrapFewShot` 是如何工作的？
+
+`LabeledFewShot` 是最基本的提示器，它接受训练集作为输入，并将训练集的子集分配给每个学生预测器的演示属性。您可以将其简单地视为向提示中添加少量样本示例。
+
+`BootStrapFewShot` 从这里开始，它开始：
+1. 初始化一个学生程序，这是我们正在优化的程序，以及一个教师程序，除非另有说明，否则它是学生的克隆。
+
+2. 然后向教师添加演示，使用`LabeledFewShot`提示器。
+
+3. 在学生和教师模型中，为预测器的名称和相应实例创建映射。
+4. 确定了最大自举演示数量（max_bootstraps）。这限制了生成的初始训练数据量。
+
+5. 过程遍历训练集中的每个示例。对于每个示例，该方法检查是否达到了最大自举演示次数。如果是，则停止该过程。
+
+6. 对于每个训练示例，教师模型尝试生成一个预测。
+
+7. 如果教师模型成功生成了一个预测，将捕获该预测过程的跟踪。该跟踪包括有关调用了哪些预测器、它们接收的输入以及它们生成的输出的详细信息。
+
+8. 如果预测成功，将为跟踪中的每个步骤创建一个演示（demo）。该演示包括预测器的输入和其生成的输出。
+
+除此之外，还有 `BootstrapFewShotWithOptuna`、`BootstrapFewShotWithRandomSearch` 等工作原理相同，只是在示例发现过程中略有变化。
+
+***
+
+<AuthorDetails name="Herumb Shandilya"/>

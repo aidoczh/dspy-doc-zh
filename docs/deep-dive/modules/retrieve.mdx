@@ -1,0 +1,69 @@
+import AuthorDetails from '@site/src/components/AuthorDetails';
+
+# 检索
+
+## 背景
+DSPy支持通过检索模块进行检索，该模块用于处理用户查询并从检索语料库中输出相关段落。该模块与DSPy支持的检索模型客户端相关联，这些客户端是用户可以利用的检索服务器，用于检索信息检索任务中的信息。
+
+## 实例化检索
+
+通过用户定义的`k`个检索段落来简单实例化检索，以返回查询的结果。
+
+```python
+class Retrieve(Parameter):
+    def __init__(self, k=3):
+        self.stage = random.randbytes(8).hex()
+        self.k = k
+```
+
+此外，通过`dspy.configure`配置检索模型客户端或服务器，允许用户通过来自检索的内部调用在DSPy程序中进行检索。
+
+```python
+#示例用法
+
+#定义一个检索模型服务器以发送检索请求
+colbertv2_wiki17_abstracts = dspy.ColBERTv2(url='http://20.102.90.50:2017/wiki17_abstracts')
+
+#通过内部调用配置检索服务器
+dspy.settings.configure(rm=colbertv2_wiki17_abstracts)
+
+#定义检索模块
+retriever = dspy.Retrieve(k=3)
+```
+
+### 内部机制
+
+检索利用内部配置的检索器发送单个查询或多个查询列表，以确定前k个相关段落。该模块为每个提供的查询查询检索器，累积每个段落的分数（如果设置了`by_prob`参数，则为概率），并按其累积分数或概率对段落进行排序。
+
+检索模块还可以集成重新排序器（如果配置了），在这种情况下，重新排序器根据其与查询相关性重新对检索到的段落进行评分，提高结果的准确性。
+
+### 整合一切
+
+现在，我们可以对样本查询或查询列表调用检索模块，并观察前K个相关段落。
+
+```python
+query='When was the first FIFA World Cup held?'
+
+# 对特定查询调用检索器。
+topK_passages = retriever(query).passages
+
+print(f"问题的前{retriever.k}个段落: {query} \n", '-' * 30, '\n')
+
+for idx, passage in enumerate(topK_passages):
+    print(f'{idx+1}]', passage, '\n')
+```
+
+```
+问题的前3个段落: When was the first FIFA World Cup held? 
+ ------------------------------ 
+
+1] FIFA世界杯历史 | FIFA世界杯首次于1930年举办，当时的FIFA主席朱尔斯·里梅特[...]。
+
+2] 1950年FIFA世界杯 | 1950年FIFA世界杯于1950年6月24日至7月16日在巴西举行[...]。
+
+3] 1970年FIFA世界杯 | 1970年FIFA世界杯是第九届FIFA世界杯，每四年[...]。
+```
+
+***
+
+<AuthorDetails name="Arnav Singhvi"/>

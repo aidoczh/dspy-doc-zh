@@ -1,0 +1,142 @@
+---
+sidebar_position: 2
+---
+
+import AuthorDetails from '@site/src/components/AuthorDetails';
+
+# 思维程序
+
+## 背景
+
+DSPy支持思维程序（PoT）提示技术，集成了一个先进的模块，能够具有问题解决和程序执行能力。PoT建立在思维链的基础上，通过迭代的细化将推理步骤转化为可执行的编程语句。这提高了输出的准确性，并自我纠正了生成代码中的错误。完成这些迭代后，PoT将执行委托给程序解释器。目前，该类支持生成和执行Python代码。
+
+## 实例化思维程序
+
+思维程序是基于用户定义的DSPy签名实例化的，可以采用简单形式，如 `input_fields -> output_fields`。用户还可以指定 `max_iters` 来设置生成代码的自我细化过程的最大迭代次数。默认值为3次迭代。一旦达到最大迭代次数，PoT将生成最终输出。
+
+```python
+import dsp
+import dspy
+from ..primitives.program import Module
+from ..primitives.python_interpreter import CodePrompt, PythonInterpreter
+import re
+
+class ProgramOfThought(Module):
+    def __init__(self, signature, max_iters=3):
+        ...
+```
+
+```python
+#示例用法
+
+#为基本问答定义一个简单签名
+generate_answer_signature = dspy.Signature("question -> answer")
+generate_answer_signature.attach(question=("Question:", "")).attach(answer=("Answer:", "often between 1 and 5 words"))
+
+# 将签名传递给思维程序模块
+pot = dspy.ProgramOfThought(generate_answer_signature)
+```
+
+## 内部机制
+
+思维程序有三种关键模式：生成、重生成和回答。每种模式都是一个思维链模块，封装了每种模式的目的的签名和指令。这些模式在PoT迭代完成时动态创建，内部考虑了用户的输入和输出字段。
+
+**生成模式:**
+
+启动具有签名 `(question -> generated_code)` 的Python代码生成的初始代码生成。
+
+**重生成模式:**
+
+用于细化Python代码的生成，考虑先前生成的代码和现有错误，具有签名 `(question, previous_code, error -> generated_code)`。如果错误在最大迭代次数之后仍然存在，用户将收到警报，并且输出将返回为 `None`。
+
+**回答模式:**
+
+执行最后存储的生成代码并输出最终答案，具有签名 `(question, final_generated_code, code_output -> answer)`。
+
+**关键内部机制:**
+- **代码解析:**
+    思维程序 (Program of Thought) 在内部将每个代码生成处理为字符串，并过滤掉多余的部分，以确保代码块符合可执行的 Python 语法。如果代码为空或不符合这些准则，解析器将返回一个错误字符串，表示思维程序 (PoT) 需要重新生成。
+
+- **代码执行:**
+    思维程序依赖于由 CAMEL-AI 改编的 Python 解释器来执行 LLMs 生成的代码。最终的代码生成被格式化为一个 CodePrompt 实例，并由 PythonInterpreter 执行。这种适配存在于 [DSPy primitives](https://github.com/stanfordnlp/dspy/blob/main/dspy/primitives/python_interpreter.py) 中。
+
+## 将一切联系起来
+使用思维程序 (ProgramOfThought) 反映了基本的 `Predict` 和 `ChainOfThought` 模块的简单性。以下是一个示例调用：
+
+```python
+# 在特定输入上调用思维程序模块
+question = 'Sarah has 5 apples. She buys 7 more apples from the store. How many apples does Sarah have now?'
+result = pot(question=question)
+
+print(f"Question: {question}")
+print(f"Final Predicted Answer (after ProgramOfThought process): {result.answer}")
+```
+```
+问题: Sarah has 5 apples. She buys 7 more apples from the store. How many apples does Sarah have now?
+最终预测答案 (经过思维程序处理后): 12
+```
+
+让我们通过检查其历史记录来窥探思维程序 (ProgramOfThought) 在内部的运行方式，最多迭代次数为 (+1 以查看最终生成)。(这假设了初始的 DSPy 设置和 LMs 以及 RMs 的配置)。
+
+`lm.inspect_history(n=4)`
+```
+你将会收到 `question`，然后你需要用 `generated_code` 来回答。
+生成可执行的 Python 代码，以编程方式计算正确的 `generated_code`。
+在计算完成后，确保你的代码的最后一行评估为正确的 `generated_code` 值。
+
+---
+
+按照以下格式进行。
+
+Question: 
+Reasoning: 让我们一步一步地思考，以便 ${生成 generated_code}。我们 ...
+Code: 回答问题的 Python 代码
+
+---
+
+Question: Sarah 有 5 个苹果。她从商店购买了 7 个苹果。现在 Sarah 有多少个苹果？
+Reasoning: 让我们一步一步地思考，以便生成 generated_code。我们从 Sarah 初始拥有的苹果数量开始，即 5 个。然后，我们加上她从商店购买的苹果数量，即 7 个。最后，我们通过将这两个数量相加来计算 Sarah 现在拥有的苹果总数。
+Code: 
+
+apples_initial = 5
+apples_bought = 7
+
+total_apples = apples_initial + apples_bought
+total_apples
+
+给出最终代码 `question`，`final_generated_code`，`code_output`，提供最终的 `answer`。
+
+---
+
+按照以下格式进行。
+
+Question: 
+
+Code: 回答问题的 Python 代码
+
+Code Output: 先前生成的 Python 代码的输出
+
+Reasoning: 让我们一步一步地思考，以便 ${生成答案}。我们 ...
+
+Answer: 通常是 1 到 5 个单词
+
+---
+
+Question: Sarah 有 5 个苹果。她从商店购买了 7 个苹果。现在 Sarah 有多少个苹果？
+
+Code:
+apples_initial = 5
+apples_bought = 7
+
+total_apples = apples_initial + apples_bought
+total_apples
+
+Code Output: 12
+
+Reasoning: 让我们一步一步地思考，以便生成答案。我们从 Sarah 初始拥有的苹果数量开始，即 5 个。然后，我们加上她购买的苹果数量，即 7 个。现在 Sarah 拥有的苹果总数是 12。
+
+Answer: 12
+```
+***
+
+<作者详情 姓名="Arnav Singhvi"/>

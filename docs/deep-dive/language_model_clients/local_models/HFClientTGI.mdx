@@ -1,0 +1,90 @@
+
+import AuthorDetails from '@site/src/components/AuthorDetails';
+
+## [HFClient TGI](https://github.com/huggingface/text-generation-inference)
+
+### 先决条件 - 在本地启动 TGI 服务器
+
+请参考 [Text Generation-Inference Server API](/api/local_language_model_clients/TGI) 来设置本地 TGI 服务器。
+
+```bash
+#示例 TGI 服务器启动
+
+model=meta-llama/Llama-2-7b-hf # 设置为您希望使用的特定 Hugging Face 模型 ID。
+num_shard=1 # 设置您希望使用的分片数。
+volume=$PWD/data # 与 Docker 容器共享卷，以避免每次运行都下载权重
+
+docker run --gpus all --shm-size 1g -p 8080:80 -v $volume:/data -e HUGGING_FACE_HUB_TOKEN={your_token} ghcr.io/huggingface/text-generation-inference:latest --model-id $model --num-shard $num_shard
+```
+
+此命令将启动服务器，并使其可以在 `http://localhost:8080` 访问。
+
+
+### 设置 TGI 客户端
+
+构造函数初始化 `HFModel` 基类以支持处理提示 HuggingFace 模型。它配置客户端以与托管的 TGI 服务器通信以生成请求。 这需要以下参数：
+
+- `model`（_str_）：连接到 TGI 服务器的 Hugging Face 模型的 ID。
+- `port`（_int_ 或 _list_）：用于与 TGI 服务器通信的端口。这可以是单个端口号（`8080`）或 TGI 端口的列表（`[8080, 8081, 8082]`）以路由请求。
+- `url`（_str_）：托管 TGI 服务器的基本 URL。这通常是 `"http://localhost"`。
+- `http_request_kwargs`（_dict_）：要传递给 TGI 服务器的 HTTP 请求函数的其他关键字参数字典。默认为 `None`。
+- `**kwargs`：用于配置 TGI 客户端的其他关键字参数。
+
+TGI 构造函数示例：
+
+```python
+class HFClientTGI(HFModel):
+    def __init__(self, model, port, url="http://future-hgx-1", http_request_kwargs=None, **kwargs):
+```
+
+### 内部机制
+
+#### `_generate(self, prompt, **kwargs) -> dict`
+
+**参数:**
+- `prompt`（_str_）：要发送到托管在 TGI 服务器上的模型的提示。
+- `**kwargs`：用于完成请求的其他关键字参数。
+
+**返回:**
+- `dict`：带有 `prompt` 和响应 `choices` 列表的字典。
+
+在内部，该方法处理准备请求提示和相应有效载荷以获取响应的具体细节。
+
+生成后，该方法解析从服务器接收的 JSON 响应，并通过 `json_response["generated_text"]` 检索输出。然后将其存储在 `completions` 列表中。
+
+如果 JSON 响应包括附加的 `details` 参数，相应地，在 `details` 中包含 `best_of_sequences`，则表示生成了多个序列。这通常也是在初始化 kwargs 中 `best_of > 1` 的情况。每个序列通过 `x["generated_text"]` 访问，并添加到 `completions` 列表中。
+
+最后，该方法使用两个键构建响应字典：原始请求 `prompt` 和 `choices`，其中 `choices` 是一个字典列表，表示生成的完成，其中 `text` 键保存响应生成的文本。
+
+### 使用 TGI 客户端
+
+```python
+tgi_llama2 = dspy.HFClientTGI(model="meta-llama/Llama-2-7b-hf", port=8080, url="http://localhost")
+```
+
+### 通过 TGI 客户端发送请求
+
+1) _**推荐**_ 使用 `dspy.configure` 配置默认 LM。
+
+这样，您可以在 DSPy 中定义程序，并简单地在输入字段上调用模块，让 DSPy 在配置的 LM 上内部调用提示。
+
+```python
+dspy.configure(lm=tgi_llama2)
+
+#示例 DSPy CoT QA 程序
+qa = dspy.ChainOfThought('question -> answer')
+
+response = qa(question="What is the capital of Paris?") #提示到 tgi_llama2
+print(response.answer)
+```
+
+2) 直接使用客户端生成响应。
+
+```python
+response = tgi_llama2._generate(prompt='What is the capital of Paris?')
+print(response)
+```
+
+***
+
+<AuthorDetails name="Arnav Singhvi"/>

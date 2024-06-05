@@ -1,0 +1,89 @@
+
+import AuthorDetails from '@site/src/components/AuthorDetails';
+
+## Anyscale
+
+### 先决条件
+
+- Anyscale `api_key` 和 `api_base`（_**对于非缓存示例**_）。
+在开发环境的 `.env` 文件中设置如下：
+
+```
+ANYSCALE_API_BASE = ...
+ANYSCALE_API_KEY = ...
+```
+
+这将在 Anyscale 客户端中被检索为：
+```python
+self.api_base = os.getenv("ANYSCALE_API_BASE")
+self.token = os.getenv("ANYSCALE_API_KEY")
+```
+
+### 设置 Anyscale 客户端
+
+构造函数初始化 `HFModel` 基类以支持处理提示模型。这需要以下参数：
+
+**参数:**
+- `model`（_str_）：托管在 Anyscale 端点上的模型的 ID。
+- `**kwargs`：用于配置 Anyscale 客户端的其他关键字参数。
+
+Anyscale 构造函数示例：
+
+```python
+class Anyscale(HFModel):
+    def __init__(self, model, **kwargs):
+```
+
+### 内部机制
+
+#### `_generate(self, prompt, use_chat_api=False, **kwargs):`
+
+**参数:**
+- `prompt`（_str_）：要发送到 Anyscale 的提示。
+- `use_chat_api`（_bool_）：是否使用 Anyscale 聊天模型端点的标志。默认为 False。
+- `**kwargs`：用于完成请求的其他关键字参数。
+
+**返回:**
+- `dict`：带有 `prompt` 和响应 `choices` 列表的字典。
+
+在内部，该方法处理准备请求提示和相应有效载荷以获取响应的具体细节。
+
+Anyscale 令牌设置在请求标头中，以确保授权发送请求到端点。
+
+如果设置了 `use_chat_api`，该方法设置 Anyscale url 聊天端点和聊天模型的提示模板。然后检索生成的 JSON 响应，并通过检索响应的 `message` : `content` 设置 `completions` 列表。
+
+如果未设置 `use_chat_api`，该方法使用默认的 Anyscale url 端点。类似地检索生成的 JSON 响应，但通过将响应的 `text` 设置为完成来设置 `completions` 列表。
+
+最后，在处理请求和响应之后，该方法构造带有两个键的响应字典：原始请求 `prompt` 和 `choices`，一个代表生成的 `completions` 的字典列表，其中 `text` 键保存响应生成的文本。
+
+### 使用 Anyscale 客户端
+
+```python
+anyscale = dspy.Anyscale(model='meta-llama/Llama-2-70b-chat-hf')
+```
+
+### 通过 Anyscale 客户端发送请求
+
+1) _**推荐**_ 使用 `dspy.configure` 配置默认 LM。
+
+这允许您在 DSPy 中定义程序，并简单地调用输入字段上的模块，让 DSPy 在配置的 LM 上内部调用提示。
+
+```python
+dspy.configure(lm=anyscale)
+
+#示例 DSPy CoT QA 程序
+qa = dspy.ChainOfThought('question -> answer')
+
+response = qa(question="What is the capital of Paris?") #提示到 Anyscale
+print(response.answer)
+```
+
+2) 直接使用客户端生成响应。
+
+```python
+回应 = anyscale(prompt='巴黎的首都是什么？')
+打印(回应)
+```
+***
+
+<AuthorDetails name="Arnav Singhvi"/>

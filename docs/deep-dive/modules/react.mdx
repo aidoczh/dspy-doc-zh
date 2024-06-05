@@ -1,0 +1,185 @@
+---
+sidebar_position: 2
+---
+
+import AuthorDetails from '@site/src/components/AuthorDetails';
+
+# ReAct
+
+## 背景
+
+DSPy支持ReAct，这是一个设计用于以交互方式处理复杂任务的LLM代理。ReAct由一个解释、决策和基于行动的活动（“思考、行动和观察”）的迭代循环组成，基于不断发展的输入和输出字段集。通过这种实时迭代方法，ReAct代理可以分析并随着时间推移适应其响应，因为新信息变得可用。
+
+## 实例化ReAct
+
+要实例化ReAct模块，请定义并传入一个DSPy Signature。
+
+```python
+# 为基本问答定义一个简单的签名
+class BasicQA(dspy.Signature):
+    """用简短的事实性答案回答问题。"""
+    question = dspy.InputField()
+    answer = dspy.OutputField(desc="通常在1到5个单词之间")
+
+# 将签名传递给ReAct模块
+react_module = dspy.ReAct(BasicQA)
+```
+
+## 内部机制
+
+### ReAct循环
+
+ReAct在一个动态签名集成过程下运行，考虑签名输入并执行思考、行动、观察循环以响应签名输出。思考（或推理）导致行动（如查询或活动）。这些行动然后导致观察（如结果或响应），随后反馈到下一个思考中。
+
+这个循环会保持一定数量的迭代次数，由`max_iters`指定。思考-行动-观察循环的默认值为5次迭代。一旦达到最大迭代次数，如果行动已完成，则ReAct将返回最终输出`(Finish[answer])`，或者返回一个空字符串以指示代理无法确定最终输出。
+
+:::caution
+目前，ReAct仅支持其签名中的一个输出字段。我们计划在未来的开发中扩展此功能。
+:::
+
+### ReAct工具
+
+ReAct中的工具可以塑造代理的交互和响应机制，DSPy通过允许用户传入针对其任务场景量身定制的工具集来确保这种可定制性。默认工具是`dspy.Retrieve`模块（用于在行动步骤期间从检索模型中检索信息），默认`num_results=3`，这些可以作为参数传递给ReAct模块的初始化。
+
+## 将所有内容联系起来
+
+使用ReAct反映了基本的`Predict`和`ChainOfThought`模块的简单性。以下是一个示例调用：
+
+```python
+# 在特定输入上调用ReAct模块
+question = '除了Apple遥控器，还有哪些设备可以控制最初设计用于与之交互的Apple遥控器的程序？'
+result = react_module(question=question)
+
+print(f"问题: {question}")
+print(f"最终预测答案（经过ReAct处理后）: {result.answer}")
+```
+```
+问题：除了苹果遥控器，还有哪些设备可以控制最初设计用于与之交互的苹果遥控器的程序？
+最终预测答案（经过 ReAct 过程后）：苹果遥控器和 Siri 遥控器可以控制 Front Row 媒体程序。
+```
+让我们通过检查其历史记录来一窥 ReAct 的内部运行情况，直至最大迭代次数。（这假设了初始的 DSPy 设置和 LM、RM 的配置）。
+
+`lm.inspect_history(n=3)`
+```
+-------------------------Step 1---------------------------------
+You will be given `question` and you will respond with `answer`.
+
+To do this, you will interleave Thought, Action, and Observation steps.
+
+Thought can reason about the current situation, and Action can be the following types:
+
+(1) Search[query], which takes a search query and returns one or more potentially relevant passages from a corpus
+(2) Finish[answer], which returns the final `answer` and finishes the task
+
+---
+
+Follow the following format.
+
+Question: ${question}
+Thought 1: next steps to take based on last observation
+Action 1: always either Search[query] or, when done, Finish[answer]
+
+---
+
+Question: Aside from the Apple Remote, what other devices can control the program Apple Remote was originally designed to interact with?
+Thought 1: I need to find out what program the Apple Remote was originally designed to interact with.
+Action 1: Search["program Apple Remote was originally designed to interact with"]
+
+-------------------------Step 2---------------------------------
+You will be given `question` and you will respond with `answer`.
+
+To do this, you will interleave Thought, Action, and Observation steps.
+
+Thought can reason about the current situation, and Action can be the following types:
+
+(1) Search[query], which takes a search query and returns one or more potentially relevant passages from a corpus
+(2) Finish[answer], which returns the final `answer` and finishes the task
+
+---
+
+Follow the following format.
+
+Question: ${question}
+
+Thought 1: next steps to take based on last observation
+
+Action 1: always either Search[query] or, when done, Finish[answer]
+
+Observation 1: observations based on action
+
+Thought 2: next steps to take based on last observation
+
+Action 2: always either Search[query] or, when done, Finish[answer]
+
+---
+
+Question: Aside from the Apple Remote, what other devices can control the program Apple Remote was originally designed to interact with?
+
+[Thought 1, Action 1]
+
+Observation 1:
+[1] «Apple Remote | The Apple Remote is a remote control device released [...].»
+[2] «ITunes Remote | iTunes Remote (also known simply as Remote) is a software [...].»
+[3] «Siri Remote | The Siri Remote is a remote control device released in tandem [...]»
+
+Thought 2: I have found that the Apple Remote was originally designed to interact with the Front Row media program on the iSight iMac G5. I should search for other devices that can control this program.
+
+Action 2: Search["devices that can control Front Row media program"]
+
+Observation 2:
+[1] «Apple Remote» - The Apple Remote is the primary control mechanism for the Front Row media program [...].
+[2] «Siri Remote» - The Siri Remote is the successor of the Apple Remote and is designed [...].
+
+-------------------------Step 3---------------------------------
+
+You will be given `question` and you will respond with `answer`.
+
+To do this, you will interleave Thought, Action, and Observation steps.
+
+Thought can reason about the current situation, and Action can be the following types:
+
+(1) Search[query], which takes a search query and returns one or more potentially relevant passages from a corpus
+(2) Finish[answer], which returns the final `answer` and finishes the task
+
+---
+
+Follow the following format.
+
+Question: ${question}
+
+Thought 1: next steps to take based on last observation
+
+Action 1: always either Search[query] or, when done, Finish[answer]
+
+Observation 1: observations based on action
+
+Thought 2: next steps to take based on last observation
+
+Action 2: always either Search[query] or, when done, Finish[answer]
+
+Observation 2: observations based on action
+
+Thought 3: next steps to take based on last observation
+
+Action 3: always either Search[query] or, when done, Finish[answer]
+
+---
+
+Question: Aside from the Apple Remote, what other devices can control the program Apple Remote was originally designed to interact with?
+
+[Thought 1, Action 1, Observation 1, Thought 2, Action 2]
+
+Observation 2:
+[1] «Front Row (software) | Front Row is a discontinued media center [...].»
+[2] «Apple Remote | The Apple Remote is a remote control device [...].»
+[3] «Media player (software) | A media player is a computer program for [...].»
+
+Thought 3: I have found that the Apple Remote and the Siri Remote can control the Front Row media program. I should provide this information as the answer.
+
+Action 3: Finish[The Apple Remote and the Siri Remote can control the Front Row media program.]
+
+Answer: The Apple Remote and the Siri Remote can control the Front Row media program.
+```
+***
+
+<AuthorDetails name="Arnav Singhvi"/>

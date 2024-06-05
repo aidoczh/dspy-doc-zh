@@ -1,0 +1,186 @@
+---
+sidebar_position: 2
+---
+
+import AuthorDetails from '@site/src/components/AuthorDetails';
+
+# AzureAISearch
+
+AzureAISearch 是一个利用 Azure AI Search 检索模块，用于检索给定查询的顶级段落。
+
+## 先决条件
+
+```bash
+pip install azure-search-documents
+```
+
+## 设置 AzureAISearchRM 客户端
+
+构造函数初始化 `AzureAISearchRM` 类的一个实例，并设置参数以通过 Azure AI Search 服务器发送查询并检索结果。
+
+- `search_service_name` (str): Azure AI Search 服务的名称。
+- `search_api_key` (str): 访问 Azure AI Search 服务的 API 密钥。
+- `search_index_name` (str): Azure AI Search 服务中搜索索引的名称。
+- `field_text` (str): 包含搜索索引中文本内容的字段的名称。此字段将映射到 dsp 框架中的 "content" 字段。
+- `field_vector` (Optional[str]): 包含搜索索引中向量内容的字段的名称。
+- `k` (int, optional): 要检索的顶级段落的默认数量。默认为 3。
+- `azure_openai_client` (Optional[openai.AzureOpenAI]): AzureOpenAI 客户端的一个实例。必须提供 openai_client 或 embedding_func 中的一个。默认为 None。
+- `openai_embed_model` (Optional[str]): OpenAI 嵌入模型的名称。默认为 "text-embedding-ada-002"。
+- `embedding_func` (Optional[Callable]): 用于生成嵌入的函数。必须提供 openai_client 或 embedding_func 中的一个。默认为 None。
+- `semantic_ranker` (bool, optional): 是否使用语义排名。默认为 False。
+- `filter` (str, optional): 附加的过滤器查询。默认为 None。
+- `query_language` (str, optional): 查询的语言。默认为 "en-Us"。
+- `query_speller` (str, optional): 拼写器模式。默认为 "lexicon"。
+- `use_semantic_captions` (bool, optional): 是否使用语义标题。默认为 False。
+- `query_type` (Optional[QueryType], optional): 查询类型。默认为 QueryType.FULL。
+- `semantic_configuration_name` (str, optional): 语义配置的名称。默认为 None。
+- `is_vector_search` (Optional[bool]): 是否启用向量搜索。默认为 False。
+- `is_hybrid_search` (Optional[bool]): 是否启用混合搜索。默认为 False。
+- `is_fulltext_search` (Optional[bool]): 是否启用全文搜索。默认为 True。
+- `vector_filter_mode` (Optional[VectorFilterMode]): 向量过滤模式。默认为 None。
+
+
+**可用的查询类型:**
+
+- SIMPLE
+    """使用简单查询语法进行搜索。搜索文本使用简单查询语法进行解释，允许使用符号如 +、* 和 ""。默认情况下，除非指定了 searchFields 参数，否则会在所有可搜索字段上评估查询。"""
+- FULL
+    """使用完整的 Lucene 查询语法进行搜索。搜索文本使用 Lucene 查询语法进行解释。"""
+    #: 查询语言，允许进行特定字段和加权搜索，以及其他高级功能。"""
+- 语义
+    """最适合用自然语言而不是关键词表达的查询。通过使用在 Web 语料库上训练的排名模型对顶部搜索结果重新排名，提高搜索结果的准确性。"""
+
+    详细信息：https://learn.microsoft.com/en-us/azure/search/search-query-overview
+
+**可用的向量过滤模式：**
+
+- POST_FILTER = "postFilter"
+    """筛选器将在返回候选向量结果集之后应用。根据筛选器的选择性，可能导致结果少于参数 'k' 请求的数量。"""
+
+- PRE_FILTER = "preFilter"
+    """筛选器将在搜索查询之前应用。"""
+
+    详细信息：https://learn.microsoft.com/en-us/azure/search/vector-search-filters
+
+**注意**
+
+- `AzureAISearchRM` 客户端允许您执行向量搜索、混合搜索或全文搜索。
+- 默认情况下，`AzureAISearchRM` 客户端使用 Azure OpenAI 客户端生成嵌入。如果您想使用其他内容，可以提供自定义的嵌入函数，但必须提供 openai_client 或 embedding_func 中的一个。
+- 如果需要启用语义搜索，无论是向量、混合还是全文搜索，请将 `semantic_ranker` 标志设置为 True。
+- 如果 `semantic_ranker` 为 True，则始终将 `query_type` 设置为 QueryType.SEMANTIC，并始终提供 `semantic_configuration_name`。
+
+`AzureAISearchRM` 构造函数示例：
+
+```python
+AzureAISearchRM(
+    search_service_name: str,
+    search_api_key: str,
+    search_index_name: str,
+    field_text: str,
+    field_vector: Optional[str] = None,
+    k: int = 3,
+    azure_openai_client: Optional[openai.AzureOpenAI] = None,
+    openai_embed_model: Optional[str] = "text-embedding-ada-002",
+    embedding_func: Optional[Callable] = None,
+    semantic_ranker: bool = False,
+    filter: str = None,
+    query_language: str = "en-Us",
+    query_speller: str = "lexicon",
+    use_semantic_captions: bool = False,
+    query_type: Optional[QueryType] = QueryType.FULL,
+    semantic_configuration_name: str = None,
+    is_vector_search: Optional[bool] = False,
+    is_hybrid_search: Optional[bool] = False,
+    is_fulltext_search: Optional[bool] = True,
+    vector_filter_mode: Optional[VectorFilterMode.PRE_FILTER] = None
+)
+```
+
+## 内部机制
+
+### `forward(self, query_or_queries: Union[str, List[str]], k: Optional[int] = None) -> dspy.Prediction`
+
+**参数:**
+
+- `query_or_queries` (Union[str, List[str]]): 要搜索的查询或查询。
+- `k` (_Optional[int]_, _optional_): 要检索的结果数量。如果未指定，默认为初始化期间设置的值。
+
+**返回:**
+
+- `dspy.Prediction`: 包含检索到的段落，每个段落表示为具有 `long_text` 属性的 `dotdict`。
+在内部，该方法处理准备请求查询到Azure AI搜索服务以及获取响应所需的具体细节。
+
+该函数处理基于提供的查询的前 k 个段落的检索。
+
+## 通过 AzureAISearchRM 客户端发送检索请求
+
+1. _**推荐**_ 使用 `dspy.configure` 配置默认 RM。
+
+这样，您可以在 DSPy 中定义程序，并在配置的 RM 上内部使用 `dsp.retrieve` 对查询进行检索。
+
+```python
+import dspy
+from dspy.retrieve.azureaisearch_rm import AzureAISearchRM
+
+azure_search = AzureAISearchRM(
+    "search_service_name",
+    "search_api_key",
+    "search_index_name",
+    "field_text",
+    k=3
+)
+
+dspy.settings.configure(rm=azure_search)
+retrieve = dspy.Retrieve(k=3)
+retrieval_response = retrieve("What is Thermodynamics").passages
+
+for result in retrieval_response:
+    print("Text:", result, "\n")
+```
+
+2. 直接使用客户端生成响应。
+
+```python
+from dspy.retrieve.azureaisearch_rm import AzureAISearchRM
+
+azure_search = AzureAISearchRM(
+    "search_service_name",
+    "search_api_key",
+    "search_index_name",
+    "field_text",
+    k=3
+)
+
+retrieval_response = azure_search("What is Thermodynamics", k=3)
+for result in retrieval_response:
+    print("Text:", result.long_text, "\n")
+```
+
+3. 语义混合搜索示例。
+
+```python
+from dspy.retrieve.azureaisearch_rm import AzureAISearchRM
+
+azure_search = AzureAISearchRM(
+    search_service_name="search_service_name",
+    search_api_key="search_api_key",
+    search_index_name="search_index_name",
+    field_text="field_text",
+    field_vector="field_vector",
+    k=3,
+    azure_openai_client="azure_openai_client",
+    openai_embed_model="text-embedding-ada-002",
+    semantic_ranker=True,
+    query_type=QueryType.SEMANTIC,
+    semantic_configuration_name="semantic_configuration_name",
+    is_hybrid_search=True,
+)
+
+retrieval_response = azure_search("What is Thermodynamics", k=3)
+for result in retrieval_response:
+    print("Text:", result.long_text, "\n")
+```
+
+***
+
+<AuthorDetails name="Prajapati Harishkumar Kishorkumar"/>

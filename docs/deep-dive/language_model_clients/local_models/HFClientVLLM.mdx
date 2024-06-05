@@ -1,0 +1,81 @@
+import AuthorDetails from '@site/src/components/AuthorDetails';
+
+## [HFClient vLLM](https://github.com/vllm-project/vllm)
+
+### 先决条件 - 在本地启动 vLLM 服务器
+
+请参考 [vLLM 服务器 API](/api/local_language_model_clients/vLLM) 来设置本地 vLLM 服务器。
+
+```bash
+#示例 vLLM 服务器启动
+
+ python -m vllm.entrypoints.api_server --model meta-llama/Llama-2-7b-hf --port 8080
+```
+
+此命令将启动服务器，并使其可以通过 `http://localhost:8080` 访问。
+
+### 设置 vLLM 客户端
+
+构造函数初始化 `HFModel` 基类以支持提示模型的处理，配置客户端以与托管的 vLLM 服务器通信以生成请求。这需要以下参数：
+
+- `model`（_str_）：连接到 vLLM 服务器的模型的 ID。
+- `port`（_int_）：用于与 vLLM 服务器通信的端口。
+- `url`（_str_）：托管的 vLLM 服务器的基本 URL。通常为 `"http://localhost"`。
+- `**kwargs`：用于配置 vLLM 客户端的其他关键字参数。
+
+vLLM 构造函数示例：
+
+```python
+class HFClientVLLM(HFModel):
+    def __init__(self, model, port, url="http://localhost", **kwargs):
+```
+
+### 内部机制
+
+#### `_generate(self, prompt, **kwargs) -> dict`
+
+**参数：**
+- `prompt`（_str_）：要发送到托管在 vLLM 服务器上的模型的提示。
+- `**kwargs`：用于完成请求的其他关键字参数。
+
+**返回：**
+- `dict`：带有 `prompt` 和响应 `choices` 列表的字典。
+
+在内部，该方法处理准备请求提示和相应有效载荷以获取响应的具体细节。
+
+生成后，该方法解析从服务器接收的 JSON 响应，并通过 `json_response["choices"]` 检索输出，并将其存储为 `completions` 列表。
+
+最后，该方法构造响应字典，包含两个键：原始请求 `prompt` 和 `choices`，一个表示生成完成的字典列表，其中键 `text` 包含响应生成的文本。
+
+### 使用 vLLM 客户端
+
+```python
+vllm_llama2 = dspy.HFClientVLLM(model="meta-llama/Llama-2-7b-hf", port=8080, url="http://localhost")
+```
+
+### 通过 vLLM 客户端发送请求
+
+1) _**推荐**_ 使用 `dspy.configure` 配置默认 LM。
+
+这样可以在 DSPy 中定义程序，并简单地在输入字段上调用模块，让 DSPy 在已配置的 LM 上内部调用提示。
+
+```python
+dspy.configure(lm=vllm_llama2)
+
+#示例 DSPy CoT QA 程序
+qa = dspy.ChainOfThought('question -> answer')
+
+response = qa(question="What is the capital of Paris?") #提示到 vllm_llama2
+print(response.answer)
+```
+
+2) 直接使用客户端生成响应。
+
+```python
+response = vllm_llama2._generate(prompt='What is the capital of Paris?')
+print(response)
+```
+
+***
+
+<AuthorDetails name="Arnav Singhvi"/>

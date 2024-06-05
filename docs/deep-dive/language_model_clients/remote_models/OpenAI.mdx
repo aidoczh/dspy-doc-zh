@@ -1,0 +1,80 @@
+import AuthorDetails from '@site/src/components/AuthorDetails';
+
+## OpenAI
+
+### 先决条件
+
+- OpenAI `api_key`（_**对于非缓存示例**_）
+
+### 设置 OpenAI 客户端
+
+构造函数初始化基类 `LM` 以支持向 OpenAI 模型发送提示请求。这需要以下参数：
+
+- `api_key`（_Optional[str]_，_optional_）：OpenAI API 提供者身份验证令牌。默认为 `None`。
+- `api_provider`（_Literal["openai", "azure"]_，_optional_）：要使用的 OpenAI API 提供者。默认为 `"openai"`。
+- `api_base`（Optional[str]，optional）：OpenAI API 端点的基本 URL。默认为 `None`。
+- `model_type`（_Literal["chat", "text"]_）：要使用的指定模型类型。默认为 `"gpt-3.5-turbo-instruct"`。
+- `**kwargs`：要传递给 OpenAI 请求的其他语言模型参数。这些参数使用默认值进行初始化，用于与 GPT API 通信所需的相关文本生成参数，如 `temperature`、`max_tokens`、`top_p`、`frequency_penalty`、`presence_penalty` 和 `n`。
+
+OpenAI 构造函数示例：
+
+```python
+class GPT3(LM): #This is a wrapper for the OpenAI class - dspy.OpenAI = dsp.GPT3
+    def __init__(
+        self,
+        model: str = "gpt-3.5-turbo-instruct",
+        api_key: Optional[str] = None,
+        api_provider: Literal["openai", "azure"] = "openai",
+        api_base: Optional[str] = None,
+        model_type: Literal["chat", "text"] = None,
+        **kwargs,
+    ):
+```
+
+### 内部机制
+
+#### `__call__(self, prompt: str, only_completed: bool = True, return_sorted: bool = False, **kwargs) -> List[Dict[str, Any]]`
+
+**参数:**
+- `prompt`（_str_）：要发送到 OpenAI 的提示。
+- `only_completed`（_bool_，_optional_）：返回仅已完成的响应并忽略由于长度而完成的标志。默认为 True。
+- `return_sorted`（_bool_，_optional_）：使用返回的平均对数概率对完成选择进行排序的标志。默认为 False。
+- `**kwargs`：用于完成请求的其他关键字参数。
+
+**返回:**
+- `List[Dict[str, Any]]`：完成选择的列表。
+
+在内部，该方法处理准备请求提示和相应有效载荷以获取响应的具体细节。
+
+生成后，根据 `model_type` 参数后处理完成。如果参数设置为 'chat'，生成的内容看起来像 `choice["message"]["content"]`。否则，生成的文本将是 `choice["text"]`。
+
+### 使用 OpenAI 客户端
+
+```python
+turbo = dspy.OpenAI(model='gpt-3.5-turbo')
+```
+
+### 通过 OpenAI 客户端发送请求
+
+1) _**推荐**_ 使用 `dspy.configure` 配置默认 LM。
+
+这样，您可以在 DSPy 中定义程序，并简单地在输入字段上调用模块，让 DSPy 在内部调用已配置的 LM 上的提示。
+```python
+dspy.configure(lm=turbo)
+
+# DSPy CoT 问答程序示例
+qa = dspy.ChainOfThought('question -> answer')
+
+response = qa(question="What is the capital of Paris?") # 提示到 turbo
+print(response.answer)
+```
+2) 直接使用客户端生成回复。
+
+```python
+response = turbo(prompt='巴黎的首都是什么？')
+print(response)
+```
+
+***
+
+<AuthorDetails name="Arnav Singhvi"/>

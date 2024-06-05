@@ -1,0 +1,77 @@
+---
+sidebar_position: 1
+---
+
+import AuthorDetails from '@site/src/components/AuthorDetails';
+
+# ColBERTv2
+
+## 设置 ColBERTv2 客户端
+
+构造函数初始化 `ColBERTv2` 类实例，并设置与 ColBERTv2 检索服务器交互的请求参数。该服务器远程托管在 `'http://20.102.90.50:2017/wiki17_abstracts`。
+
+- `url` (_str_): ColBERTv2 服务器的 URL。默认为 `"http://0.0.0.0"`
+- `port` (_Union[str, int]_, _Optional_): ColBERTv2 服务器的端口终点。默认为 `None`。
+- `post_requests` (_bool_, _Optional_): 是否使用 HTTP POST 请求的标志。默认为 `False`。
+
+ColBERTv2 构造函数示例：
+
+```python
+class ColBERTv2:
+    def __init__(
+        self,
+        url: str = "http://0.0.0.0",
+        port: Optional[Union[str, int]] = None,
+        post_requests: bool = False,
+    ):
+```
+
+## 内部机制
+
+### `__call__(self, query: str, k: int = 10, simplify: bool = False) -> Union[list[str], list[dotdict]]`
+
+**参数:**
+- `query` (_str_): 用于发送到 ColBERTv2 服务器的检索查询字符串。
+- `k` (_int_, _optional_): 要检索的段落数。默认为 10。
+- `simplify` (_bool_, _optional_): 是否简化输出为字符串列表的标志。默认为 False。
+
+**返回:**
+- `Union[list[str], list[dotdict]]`: 根据 `simplify` 标志，可能是表示段落内容的字符串列表 (`True`)，或包含段落详细信息的 `dotdict` 实例列表 (`False`)。
+
+在内部，该方法处理准备发送到 ColBERTv2 服务器的请求查询和相应有效载荷的具体细节。
+
+该函数处理基于提供的查询获取前 k 个段落的过程。
+
+如果设置了 `post_requests`，则该方法通过 POST 请求向服务器发送查询，否则通过 GET 请求。
+
+然后根据上述 `simplify` 标志返回条件，处理并返回响应中的前 k 个段落。
+
+## 通过 ColBERTv2 客户端发送检索请求
+1) _**推荐**_ 使用 `dspy.configure` 配置默认 RM。
+
+这样，您可以在 DSPy 中定义程序，并让 DSPy 在配置的 RM 上内部执行检索，使用 `dsp.retrieve` 在配置的 RM 上对查询进行检索。
+
+```python
+import dspy
+import dsp
+
+dspy.settings.configure(rm=colbertv2_wiki17_abstracts)
+retrieval_response = dsp.retrieve("When was the first FIFA World Cup held?", k=5)
+
+for result in retrieval_response:
+    print("Text:", result, "\n")
+```
+
+2) 直接使用客户端生成响应。
+```python
+import dspy
+
+retrieval_response = colbertv2_wiki17_abstracts('When was the first FIFA World Cup held?', k=5)
+
+for result in retrieval_response:
+    print("Text:", result['text'], "\n")
+```
+
+***
+
+<AuthorDetails name="Arnav Singhvi"/>

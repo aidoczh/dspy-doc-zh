@@ -1,0 +1,68 @@
+---
+sidebar_position: 1
+---
+
+# 安装
+
+要安装 DSPy，请运行以下命令：
+
+```text
+pip install dspy-ai
+```
+
+或者在 Google Colab 中打开我们的介绍笔记本：[<img align="center" src="https://colab.research.google.com/assets/colab-badge.svg" />](https://colab.research.google.com/github/stanfordnlp/dspy/blob/main/intro.ipynb)
+
+默认情况下，DSPy 依赖于 `openai==0.28`。但是，如果安装了 `openai>=1.0`，该库也能正常使用。两者都受支持。
+
+对于可选的 Pinecone、Qdrant、ChromaDB、Marqo 或 Milvus 检索集成，包括以下额外内容：
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+:::info[安装命令]
+
+<Tabs>
+    <TabItem value="default" label="无额外内容">
+        ```text
+        pip install dspy-ai
+        ```
+    </TabItem>
+    <TabItem value="pinecone" label="Pinecone">
+        ```text
+        pip install "dspy-ai[pinecone]"
+        ```
+    </TabItem>
+    <TabItem value="qdrant" label="Qdrant">
+        ```text
+        pip install "dspy-ai[qdrant]"
+        ```
+    </TabItem>
+    <TabItem value="chromadb" label="ChromaDB">
+        ```text
+        pip install "dspy-ai[chromadb]"
+        ```
+    </TabItem>
+    <TabItem value="marqo" label="Marqo">
+        ```text
+        pip install "dspy-ai[marqo]"
+        ```
+    </TabItem>
+    <TabItem value="mongodb" label="MongoDB">
+        ```text
+        pip install "dspy-ai[mongodb]"
+        ```
+    </TabItem>
+    <TabItem value="weaviate" label="Weaviate">
+        ```text
+        pip install "dspy-ai[weaviate]"
+        ```
+    </TabItem>
+    <TabItem value="milvus" label="Milvus">
+        ```text
+        pip install "dspy-ai[milvus]"
+        ```
+    </TabItem>
+    
+</Tabs>
+
+:::

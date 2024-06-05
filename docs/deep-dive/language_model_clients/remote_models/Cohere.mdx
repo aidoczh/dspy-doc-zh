@@ -1,0 +1,85 @@
+import AuthorDetails from '@site/src/components/AuthorDetails';
+
+## Cohere
+
+### 先决条件
+
+```bash
+pip install cohere
+```
+
+- Cohere `api_key`（_**适用于非缓存示例**_）
+
+### 设置 Cohere 客户端
+
+构造函数初始化基类 `LM`，以支持向 Cohere 模型发送提示请求。这需要以下参数：
+
+**参数:**
+- `model`（_str_）: Cohere 预训练模型。默认为 `command-xlarge-nightly`。
+- `api_key`（_Optional[str]_，_可选的_）: API 提供者认证令牌。默认为 `None`。然后在内部初始化 `cohere.Client`。
+- `stop_sequences`（_List[str]_，_可选的_）: 用于结束生成的停止标记列表。
+- `max_num_generations` _内部设置_: Cohere 客户端生成的最大完成次数。默认为 5。
+
+Cohere 构造函数示例：
+
+```python
+class Cohere(LM):
+    def __init__(
+        self,
+        model: str = "command-xlarge-nightly",
+        api_key: Optional[str] = None,
+        stop_sequences: List[str] = [],
+    ):
+```
+
+### 内部机制
+
+#### `__call__(self, prompt: str, only_completed: bool = True, return_sorted: bool = False, **kwargs) -> List[Dict[str, Any]]`
+
+**参数:**
+- `prompt`（_str_）: 发送到 Cohere 的提示。
+- `only_completed`（_bool_，_可选的_）: 返回仅完成的响应并忽略由于长度而完成的标志。默认为 True。
+- `return_sorted`（_bool_，_可选的_）: 使用返回的平均对数概率对完成选项进行排序的标志。默认为 False。
+- `**kwargs`: 用于完成请求的额外关键字参数。
+
+**返回:**
+- `List[str]`: 生成的完成列表。
+
+在内部，该方法处理准备请求提示和相应有效载荷以获取响应的具体细节。
+
+该方法计算生成指定数量完成 `n` 所需的迭代次数，基于 Cohere 模型在单个请求中可以生成的 `self.max_num_generations`。随着完成迭代，它更新传递给请求有效载荷的官方 `num_generations` 参数，并使用更新的参数调用请求。
+
+这个过程从中构建一个 `choices` 列表，从中检索生成的完成。
+
+如果设置了 `return_sorted` 并且请求了多个生成，完成将按其可能性分数降序排序，并作为列表返回，最可能的完成将首先出现。
+
+### 使用 Cohere 客户端
+
+```python
+cohere = dsp.Cohere(model='command-xlarge-nightly')
+```
+
+### 通过 Cohere 客户端发送请求
+
+1) _**推荐**_ 使用 `dspy.configure` 配置默认 LM。
+
+这样，您可以在 DSPy 中定义程序，并简单地在输入字段上调用模块，让 DSPy 在内部调用配置的 LM 上的提示。
+```python
+dspy.configure(lm=cohere)
+
+# DSPy CoT 问答程序示例
+qa = dspy.ChainOfThought('question -> answer')
+
+response = qa(question="What is the capital of Paris?") # 提示进行连贯性处理
+print(response.answer)
+```
+2) 使用客户端直接生成响应。
+
+```python
+response = cohere(prompt='巴黎的首都是什么？')
+print(response)
+```
+
+***
+
+<AuthorDetails name="Arnav Singhvi"/>

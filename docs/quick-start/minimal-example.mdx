@@ -1,0 +1,100 @@
+---
+sidebar_position: 2
+---
+
+import AuthorDetails from '@site/src/components/AuthorDetails';
+
+# 最小工作示例
+
+在这篇文章中，我们将通过使用 DSPy 库的最小工作示例来向您展示。
+
+我们将使用 [GSM8K 数据集](https://huggingface.co/datasets/gsm8k) 和 OpenAI GPT-3.5-turbo 模型来模拟 DSPy 中的提示任务。
+
+## 设置
+
+在我们开始示例之前，让我们确保我们的环境已经正确配置。我们将首先导入必要的模块并配置我们的语言模型：
+
+```python
+import dspy
+from dspy.datasets.gsm8k import GSM8K, gsm8k_metric
+
+# 设置语言模型
+turbo = dspy.OpenAI(model='gpt-3.5-turbo-instruct', max_tokens=250)
+dspy.settings.configure(lm=turbo)
+
+# 从 GSM8K 数据集加载数学问题
+gsm8k = GSM8K()
+gsm8k_trainset, gsm8k_devset = gsm8k.train[:10], gsm8k.dev[:10]
+```
+
+让我们看看 `gsm8k_trainset` 和 `gsm8k_devset` 都包含什么内容：
+
+```python
+print(gsm8k_trainset)
+```
+
+`gsm8k_trainset` 和 `gsm8k_devset` 数据集包含一个示例列表，每个示例都有 `question` 和 `answer` 字段。
+
+## 定义模块
+
+在环境设置好之后，让我们定义一个自定义程序，利用 [`ChainOfThought`](/api/modules/ChainOfThought) 模块进行逐步推理以生成答案：
+
+```python
+class CoT(dspy.Module):
+    def __init__(self):
+        super().__init__()
+        self.prog = dspy.ChainOfThought("question -> answer")
+    
+    def forward(self, question):
+        return self.prog(question=question)
+```
+
+## 编译和评估模型
+
+有了我们简单的程序，让我们继续使用 [`BootstrapFewShot`](/api/optimizers/BootstrapFewShot) 提示器来编译它：
+
+```python
+from dspy.teleprompt import BootstrapFewShot
+
+# 设置优化器：我们希望“引导”（即自动生成）我们的 CoT 程序的 4 个示例。
+config = dict(max_bootstrapped_demos=4, max_labeled_demos=4)
+
+# 优化！在这里使用 `gsm8k_metric`。一般来说，度量将告诉优化器它的表现如何。
+teleprompter = BootstrapFewShot(metric=gsm8k_metric, **config)
+optimized_cot = teleprompter.compile(CoT(), trainset=gsm8k_trainset)
+```
+
+请注意，BootstrapFewShot 不是一个优化提示器，即它只是为管道步骤（在本例中为思维链推理）创建和验证示例，但不优化度量。其他提示器如 `BootstrapFewShotWithRandomSearch` 和 `MIPRO` 将应用直接优化。
+
+## 评估
+
+现在我们有了一个编译（优化）的 DSPy 程序，让我们继续评估它在开发数据集上的性能。
+
+```python
+from dspy.evaluate import Evaluate
+
+# 设置评估器，可以多次使用。
+evaluate = Evaluate(devset=gsm8k_devset, metric=gsm8k_metric, num_threads=4, display_progress=True, display_table=0)
+
+# 评估我们的 `optimized_cot` 程序。
+evaluate(optimized_cot)
+```
+
+## 检查模型的历史记录
+为了更深入地理解模型的交互作用，我们可以通过检查模型的历史记录来回顾最近的生成：
+
+```python
+turbo.inspect_history(n=1)
+```
+
+就是这样！您已成功使用 DSPy 库创建了一个可工作的示例。
+
+这个示例展示了如何设置您的环境，定义一个自定义模块，编译一个模型，并使用提供的数据集和话筒配置来严格评估其性能。
+
+请随意调整和扩展这个示例，以适应您特定的用例，同时探索 DSPy 的广泛功能。
+
+如果您想尝试刚刚构建的内容，请运行 `optimized_cot(question='在这里填写您的问题')`。
+
+***
+
+<AuthorDetails name="Herumb Shandilya"/>

@@ -1,0 +1,155 @@
+---
+sidebar_position: 3
+---
+
+import AuthorDetails from '@site/src/components/AuthorDetails';
+
+# 创建自定义本地模型（LM）客户端
+
+DSPy为您提供了多个LM客户端，您可以使用它们来执行任何流水线。但是，如果您有一个API或LM，无法通过DSPy中托管的任何现有客户端执行，您可以自己创建一个！这并不太困难，让我们看看如何实现吧！
+
+## LM客户端的格式
+
+LM客户端至少需要实现3个方法：`__init__`，`basic_request`和`__call__`。因此，您的自定义LM客户端应该遂循以下模板：
+
+```python
+from dsp import LM
+
+class CustomLMClient(LM):
+    def __init__(self):
+        self.provider = "default"
+        self.history = []
+
+    def basic_request(self, prompt, **kwargs):
+        pass
+
+    def __call__(self, prompt, only_completed=True, return_sorted=False, **kwargs):
+        pass
+```
+
+虽然您可以根据需要大多数添加和自定义客户端，但客户端应该可配置，以便利用DSPy的每个功能而不中断。其中一个关键功能是通过`inspect_history`查看对LM的调用历史。具体如下：
+
+* `__init__`：应包含`self.provider="default"`和`self.history=[]`。`self.history`将包含自对象初始化以来通过LM调用创建的提示-完成对。`self.provider`在`inspect_history`方法中使用，大部分时间您可以将其保留为**"default"**。
+* `basic_request`：此函数调用LM并检索给定提示的完成结果，`kwargs`中通常包含诸如`temperature`，`max_tokens`等参数。在从LM接收完成后，您必须通过将字典`{"prompt": prompt, "response": response}`附加到其中来更新`self.history`列表。这些字段是强制的，但您可以根据需要添加任何其他参数。
+* `__call__`：此函数应返回模型返回的完成列表。在基本情况下，这可以是字符串完成的列表。或者，它可以是一个元组对，其中包含由`Cohere` LM客户端返回的完成和相应的可能性。此外，完成应通过`request`调用接收，该调用除非修改，否则会按原样调用`basic_request`，确保也更新了历史记录。
+
+到目前为止，您一定已经意识到我们制定这些规则的主要原因主要是为了使历史检查和模块工作时不会出错。
+
+:::info
+您可以通过在`__call__`中处理历史记录更新来减轻问题。因此，如果您可以在`__call__`中处理历史记录更新，您只需要实现`__init__`和`__call__`。
+
+或者，如果您愿意，可以根据自己的需求重写`inspect_history`方法！
+:::
+
+## 实现我们的自定义LM
+根据我们目前所学，让我们实现调用 Claude API 的自定义语言模型（LM）。在 Claude 中，我们需要初始化 2 个组件以成功调用：`API_KEY` 和 `BASE_URL`。从 [**Anthropic 文档**](https://docs.anthropic.com/claude/reference/messages_post) 中得知，基本 URL 是 `https://api.anthropic.com/v1/messages`。让我们编写我们的 `__init__` 方法：
+
+```python
+def __init__(model, api_key):
+    self.model = model
+    self.api_key = api_key
+    self.provider = "default"
+    self.history = []
+
+    self.base_url = "https://api.anthropic.com/v1/messages"
+```
+
+根据上述实现，我们现在希望传入我们的 `model`，比如 `claude-2`，以及你将在 Claude 的 API 控制台中看到的 `api_key`。现在是定义 `basic_request` 方法的时候了，在这里我们将调用 `self.base_url` 并获取完成的结果：
+
+```python
+def basic_request(self, prompt: str, **kwargs):
+    headers = {
+        "x-api-key": self.api_key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "messages-2023-12-15",
+        "content-type": "application/json"
+    }
+
+    data = {
+        **kwargs,
+        "model": self.model,
+        "messages": [
+            {"role": "user", "content": prompt}
+        ]
+    }
+
+    response = requests.post(self.base_url, headers=headers, json=data)
+    response = response.json()
+
+    self.history.append({
+        "prompt": prompt,
+        "response": response,
+        "kwargs": kwargs,
+    })
+    return response
+```
+
+现在是定义 `__call__` 方法的时候，它将把所有内容整合在一起：
+
+```python
+def __call__(self, prompt, only_completed=True, return_sorted=False, **kwargs):
+    response = self.request(prompt, **kwargs)
+
+    completions = [result["text"] for result in response["content"]]
+
+    return completions
+```
+
+为了将所有内容写在一个类中，我们得到：
+```python
+from dsp import LM
+
+class Claude(LM):
+    def __init__(model, api_key):
+        self.model = model
+        self.api_key = api_key
+        self.provider = "default"
+
+        self.base_url = "https://api.anthropic.com/v1/messages"
+
+    def basic_request(self, prompt: str, **kwargs):
+        headers = {
+            "x-api-key": self.api_key,
+            "anthropic-version": "2023-06-01",
+            "anthropic-beta": "messages-2023-12-15",
+            "content-type": "application/json"
+        }
+
+        data = {
+            **kwargs,
+            "model": self.model,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ]
+        }
+
+        response = requests.post(self.base_url, headers=headers, json=data)
+        response = response.json()
+
+        self.history.append({
+            "prompt": prompt,
+            "response": response,
+            "kwargs": kwargs,
+        })
+        return response
+
+    def __call__(self, prompt, only_completed=True, return_sorted=False, **kwargs):
+        response = self.request(prompt, **kwargs)
+
+        completions = [result["text"] for result in response["content"]]
+
+        return completions
+```
+这样就完成了！现在我们可以将其配置为 DSPy 中的 `lm`，并像任何其他 LM 客户端一样在流水线中使用它：
+
+```python
+import dspy
+
+claude = Claude(model='claude-2')
+
+dspy.settings.configure(lm=claude)
+```
+
+***
+
+<AuthorDetails name="Arnav Singhvi"/>

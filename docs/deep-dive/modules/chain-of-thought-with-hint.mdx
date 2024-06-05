@@ -1,0 +1,35 @@
+---
+sidebar_position: 2
+---
+
+import AuthorDetails from '@site/src/components/AuthorDetails';
+
+# 带提示的思维链
+
+这个类在 `ChainOfThought` 类的基础上引入了一个额外的输入字段，用于提供推理提示。包含提示可以使问题解决过程更加有针对性，尤其在复杂情况下特别有用。
+
+`ChainOfThoughtWithHint` 类通过用户定义的 DSPy 签名进行实例化，并包含一个 `hint` 参数，接受一个字符串形式的短语，用于在提示模板中提供提示。
+
+让我们看一个例子：
+
+```python
+class BasicQA(dspy.Signature):
+    """用简短的事实性答案回答问题。"""
+    question = dspy.InputField()
+    answer = dspy.OutputField(desc="通常为 1 到 5 个单词")
+
+# 将签名传递给 ChainOfThought 模块
+generate_answer = dspy.ChainOfThoughtWithHint(BasicQA)
+
+# 在特定输入旁边调用预测器，并提供一个提示。
+question='天空的颜色是什么？'
+hint = "这是你在晴天时经常看到的东西。"
+pred = generate_answer(question=question, hint=hint)
+
+print(f"问题: {question}")
+print(f"预测的答案: {pred.answer}")
+```
+
+***
+
+<AuthorDetails name="Arnav Singhvi"/>

@@ -1,0 +1,117 @@
+---
+sidebar_position: 1
+---
+
+import AuthorDetails from '@site/src/components/AuthorDetails';
+
+# DSPy 中的示例
+
+在 DSPy 中工作涉及训练集、开发集和测试集。这类似于传统的机器学习，但通常您需要更少的标签（或零标签）才能有效地使用 DSPy。
+
+DSPy 中数据的核心数据类型是 `Example`。您将使用 **Examples** 来表示训练集和测试集中的项目。
+
+DSPy 中的 **Examples** 类似于 Python 中的 `dict`，但具有一些有用的实用程序。您的 DSPy 模块将返回 `Prediction` 类型的值，这是 `Example` 的一个特殊子类。
+
+## 创建一个 `Example`
+
+当您使用 DSPy 时，您将进行大量的评估和优化运行。您的单个数据点将是 `Example` 类型的：
+
+```python
+qa_pair = dspy.Example(question="这是一个问题吗？", answer="这是一个答案。")
+
+print(qa_pair)
+print(qa_pair.question)
+print(qa_pair.answer)
+```
+**输出:**
+```text
+Example({'question': '这是一个问题吗？', 'answer': '这是一个答案。'}) (input_keys=None)
+这是一个问题吗？
+这是一个答案。
+```
+
+Examples 可以有任何字段键和任何值类型，尽管通常值是字符串。
+
+```text
+object = Example(field1=value1, field2=value2, field3=value3, ...)
+```
+
+## 指定输入键
+
+在传统的机器学习中，有分开的“输入”和“标签”。
+
+在 DSPy 中，`Example` 对象有一个 `with_inputs()` 方法，可以将特定字段标记为输入。（其余字段只是元数据或标签。）
+
+```python
+# 单个输入。
+print(qa_pair.with_inputs("question"))
+
+# 多个输入；在标记标签为输入时要小心，除非您是有意为之。
+print(qa_pair.with_inputs("question", "answer"))
+```
+
+这种灵活性允许根据不同的 DSPy 场景定制 `Example` 对象。
+
+当您调用 `with_inputs()` 时，您会获得一个示例的新副本。原始对象保持不变。
+
+
+## 元素访问和更新
+
+可以使用 `.`（点）运算符访问值。您可以通过 `object.name` 访问定义对象 `Example(name="John Doe", job="sleep")` 中键 `name` 的值。
+
+要访问或排除某些键，使用 `inputs()` 和 `labels()` 方法分别返回仅包含输入或非输入键的新 Example 对象。
+
+```python
+article_summary = dspy.Example(article= "这是一篇文章。", summary= "这是一个摘要。").with_inputs("article")
+
+input_key_only = article_summary.inputs()
+non_input_key_only = article_summary.labels()
+
+print("仅包含输入字段的 Example 对象:", input_key_only)
+print("仅包含非输入字段的 Example 对象:", non_input_key_only)
+```
+
+**输出**
+```
+仅包含输入字段的 Example 对象: Example({'article': '这是一篇文章。'}) (input_keys=None)
+仅包含非输入字段的 Example 对象: Example({'summary': '这是一个摘要。'}) (input_keys=None)
+```
+
+要排除键，使用 `without()`：
+```python
+article_summary = dspy.Example(context="这是一篇文章。", question="这是一个问题？", answer="这是一个答案。", rationale="这是一个理由。").with_inputs("context", "question")
+
+print("Example object without answer & rationale keys:", article_summary.without("answer", "rationale"))
+```
+**输出**
+```
+示例对象没有答案和解释键：Example({'context': '这是一篇文章。', 'question': '这是一个问题？'}) (input_keys=None)
+```
+
+更新值只需使用 `.` 运算符分配一个新值。
+
+```python
+article_summary.context = "新的内容"
+```
+
+## 遍历示例对象
+
+`Example` 类中的迭代也类似于字典，支持诸如 `keys()`、`values()` 等方法：
+
+```python
+for k, v in article_summary.items():
+    print(f"{k} = {v}")
+```
+
+**输出**
+
+```text
+context = 这是一篇文章。
+question = 这是一个问题？
+answer = 这是一个答案。
+rationale = 这是一个解释。
+```
+
+***
+
+<AuthorDetails name="Herumb Shandilya"/>
