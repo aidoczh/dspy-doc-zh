@@ -24,6 +24,8 @@ DSPy 中文文档：http://www.aidoczh.com/dspy 这是我做的在线中文文�
 
 ![](https://github.com/aidoczh/dspy-doc-zh/blob/main/static/img/screen1.jpg)
 
+
+
 ![](https://github.com/aidoczh/dspy-doc-zh/blob/main/static/img/screen2.jpg)
 
 
@@ -74,7 +76,33 @@ npm run serve
 http://localhost:3000
 ```
 
-## 
+##  四、应用示例
+
+
+
+| DSPy案例                                                     | 文件说明                                                 |
+| ------------------------------------------------------------ | -------------------------------------------------------- |
+| [skycamp2023.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/skycamp2023.ipynb) | SkyCamp 2023 的 DSPy 教程                                |
+| [intro.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/intro.ipynb) | DSPy: 使用基础模型进行编程                               |
+| [knn.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/knn.ipynb) | DSPy KNN few-shot 示例                                   |
+| [skycamp2023_completed.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/skycamp2023_completed.ipynb) | SkyCamp 2023 的 DSPy 教程                                |
+| [longformqa_assertions.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/longformqa/longformqa_assertions.ipynb) | LongFormQA: 生成长篇长度的回答问题的响应                 |
+| [scone.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/nli/scone/scone.ipynb) | 使用 GPT-4 来为 GPT-3.5 启动少样本 CoT 演示              |
+| [dataloaders_dolly.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/dataloaders/dataloaders_dolly.ipynb) | 使用 `DataLoader` 进行数据加载                           |
+| [quiz_assertions.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/quiz/quiz_assertions.ipynb) | QuizGen: 生成多项选择题问题                              |
+| [multi_agent_llama3.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/agents/multi_agent_llama3.ipynb) | 多智能体 DSPy 程序：引导和聚合多个 LLaMa3`ReAct` 智能体  |
+| [multi_agent.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/agents/multi_agent.ipynb) | 多智能体 DSPy 程序：引导和聚合多个 GPT-3.5`ReAct` 智能体 |
+| [hotpotqa_with_assertions.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/qa/hotpot/hotpotqa_with_assertions.ipynb) | 在 DSPy 中使用断言优化                                   |
+| [hotpotqa_with_MIPRO.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/qa/hotpot/hotpotqa_with_MIPRO.ipynb) | 在 DSPy 中使用多阶段指令提案和优化（MIPRO）              |
+| [gsm8k_assertions.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/math/gsm8k/gsm8k_assertions.ipynb) | SolveGSM8k: 使用 DSPy 解决小学数学问题                   |
+| [CoT.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/math/gsm8k/CoT.ipynb) | SolveGSM8k: 使用 DSPy 解决小学数学问题                   |
+| [financial_data_text_to_sql.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/text_to_sql/financial_data_text_to_sql.ipynb) | 使用llama index查询流水线来构建文本到SQL流水线           |
+| [qdrant_retriever_example.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/integrations/qdrant/qdrant_retriever_example.ipynb) | 使用 Qdrant 的 DSPy 检索器                               |
+| [clarifai_llm_retriever_example.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/integrations/clarifai/clarifai_llm_retriever_example.ipynb) | DSPy-Clarifai lm and retriever示例                       |
+| [compiling_langchain.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/tweets/compiling_langchain.ipynb) | DSPy: 从 `LangChain` 编译链                              |
+| [tweets_assertions.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/tweets/tweets_assertions.ipynb) | TweetGen: 生成推文以回答问题                             |
+| [functional.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/functional/functional.ipynb) | 函数调用                                                 |
+| [signature_opt_typed.ipynb](https://nbviewer.org/github/aidoczh/dspy-doc-zh/blob/main/examples/functional/signature_opt_typed.ipynb) | 在DSPy中使用TypedPredictor对象                           |
 
 ## 五、公众号
 

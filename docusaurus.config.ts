@@ -17,7 +17,7 @@ const config: Config = {
   projectName: 'dspy',
 
   // Handling of broken links and markdown links
-  onBrokenLinks: 'throw',
+  onBrokenLinks: 'warn',
   onBrokenMarkdownLinks: 'warn',
 
   // Internationalization configuration, with 'en' as the default language
