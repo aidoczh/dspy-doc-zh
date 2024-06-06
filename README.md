@@ -16,7 +16,7 @@ DSPy 官方文档：https://dspy-docs.vercel.app/
 
 DSPy 论文地址：https://arxiv.org/abs/2310.03714
 
-DSPy 中文文档：http://www.aidoczh.com/dspy 这是我做的在线中文文档，方便大家查阅。
+DSPy 中文文档：http://www.aidoczh.com/docs/dspy/docs/intro , 这是我做的在线中文文档，方便大家查阅。
 
 ## 二、翻译内容
 
